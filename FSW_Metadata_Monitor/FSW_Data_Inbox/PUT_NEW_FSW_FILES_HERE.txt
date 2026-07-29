@@ -1,0 +1,2 @@
+Drop new FSW data files into this folder.
+The monitor will detect them and ask for metadata.

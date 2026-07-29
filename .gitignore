@@ -1,0 +1,18 @@
+AI Data/
+Welding Technology.pdf
+
+FSW_Metadata_Monitor/build/
+FSW_Metadata_Monitor/dist/
+FSW_Metadata_Monitor/__pycache__/
+FSW_Metadata_Monitor/*.spec
+FSW_Metadata_Monitor/*_backup_*/
+FSW_Metadata_Monitor/*_old_*/
+FSW_Metadata_Monitor/*_release/
+FSW_Metadata_Monitor/*_release.zip
+FSW_Metadata_Monitor/fsw_metadata_monitor_crash.log
+
+FSW_Metadata_Monitor/FSW_Data_Library/*
+!FSW_Metadata_Monitor/FSW_Data_Library/.gitkeep
+
+FSW_Metadata_Monitor/FSW_Data_Inbox/*
+!FSW_Metadata_Monitor/FSW_Data_Inbox/PUT_NEW_FSW_FILES_HERE.txt
