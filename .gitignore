@@ -16,3 +16,19 @@ FSW_Metadata_Monitor/FSW_Data_Library/*
 
 FSW_Metadata_Monitor/FSW_Data_Inbox/*
 !FSW_Metadata_Monitor/FSW_Data_Inbox/PUT_NEW_FSW_FILES_HERE.txt
+
+DED_Metadata_Monitor/__pycache__/
+DED_Metadata_Monitor/build/
+DED_Metadata_Monitor/dist/
+DED_Metadata_Monitor/*.spec
+DED_Metadata_Monitor/*_backup_*/
+DED_Metadata_Monitor/*_old_*/
+DED_Metadata_Monitor/*_release/
+DED_Metadata_Monitor/*_release.zip
+DED_Metadata_Monitor/ded_metadata_monitor_crash.log
+
+DED_Metadata_Monitor/DED_Data_Library/*
+!DED_Metadata_Monitor/DED_Data_Library/.gitkeep
+
+DED_Metadata_Monitor/DED_Data_Inbox/*
+!DED_Metadata_Monitor/DED_Data_Inbox/PUT_NEW_DED_FILES_HERE.txt

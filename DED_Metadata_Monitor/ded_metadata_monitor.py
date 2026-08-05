@@ -1,4 +1,4 @@
-import csv
+﻿import csv
 import traceback
 import hashlib
 import os
@@ -16,16 +16,15 @@ from tkinter import messagebox, ttk
 from xml.sax.saxutils import escape
 
 
-APP_NAME = "FSW Metadata Monitor"
+APP_NAME = "DED Metadata Monitor"
 POLL_SECONDS = 3
 STABLE_SECONDS = 5
-IGNORED_INBOX_FILES = {"PUT_NEW_FSW_FILES_HERE.txt"}
+IGNORED_INBOX_FILES = {"PUT_NEW_DED_FILES_HERE.txt"}
 
 FILE_TYPES = [
-    "force_raw",
-    "ir_temperature_raw",
-    "optical_image",
-    "defect_measurement",
+    "beam_profile_csv",
+    "melt_pool_section_image",
+    "beam_section_image",
     "process_log",
     "other",
     "unrelated",
@@ -64,7 +63,7 @@ def local_stamp() -> str:
 
 
 def generated_sample_id(index: int) -> str:
-    return f"FSW_{datetime.now().strftime('%Y%m%d')}_S{index + 1:03d}"
+    return f"DED_{datetime.now().strftime('%Y%m%d')}_S{index + 1:03d}"
 
 
 def safe_text(value: str) -> str:
@@ -103,13 +102,13 @@ def infer_file_type(path: Path) -> str:
     name = path.name.lower()
     suffix = path.suffix.lower()
     if suffix in [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"]:
-        return "optical_image"
-    if "trend" in name or "thermal" in name or "temp" in name or "ir" in name:
-        return "ir_temperature_raw"
-    if "force" in name or suffix in [".xls", ".xlsx", ".tdms"]:
-        return "force_raw"
-    if "defect" in name or "area" in name:
-        return "defect_measurement"
+        if "section" in name or "melt" in name or "pool" in name:
+            return "melt_pool_section_image"
+        return "beam_section_image"
+    if suffix == ".csv":
+        return "beam_profile_csv"
+    if suffix in [".xls", ".xlsx", ".tdms", ".mp4", ".avi", ".mov"]:
+        return "process_log"
     if suffix in [".pdf", ".doc", ".docx"]:
         return "unrelated"
     return "other"
@@ -134,11 +133,11 @@ class MetadataStore:
             CREATE TABLE IF NOT EXISTS runs (
                 run_id TEXT PRIMARY KEY,
                 sample_id TEXT NOT NULL,
-                rotation_speed_rpm REAL NOT NULL,
-                travel_speed_mm_min REAL NOT NULL,
-                tool_id TEXT NOT NULL,
-                material TEXT NOT NULL,
-                thickness_mm REAL NOT NULL,
+                laser_power REAL NOT NULL,
+                scan_speed REAL NOT NULL,
+                powder_rate REAL NOT NULL,
+                argon_rate REAL,
+                substrate_temperature REAL,
                 operator TEXT,
                 created_time TEXT NOT NULL,
                 clamping_condition TEXT,
@@ -217,8 +216,8 @@ class MetadataStore:
         self.conn.execute(
             """
             INSERT OR IGNORE INTO runs (
-                run_id, sample_id, rotation_speed_rpm, travel_speed_mm_min,
-                tool_id, material, thickness_mm, operator, created_time,
+                run_id, sample_id, laser_power, scan_speed,
+                powder_rate, argon_rate, substrate_temperature, operator, created_time,
                 clamping_condition, backing_condition, cooling_condition,
                 tool_wear_state, surface_condition, optional_notes
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -226,11 +225,11 @@ class MetadataStore:
             (
                 data["run_id"],
                 data["sample_id"],
-                data["rotation_speed_rpm"],
-                data["travel_speed_mm_min"],
-                data["tool_id"],
-                data["material"],
-                data["thickness_mm"],
+                data["laser_power"],
+                data["scan_speed"],
+                data["powder_rate"],
+                data["argon_rate"],
+                data["substrate_temperature"],
                 data.get("operator", ""),
                 data["created_time"],
                 data.get("clamping_condition", "unknown"),
@@ -362,11 +361,11 @@ class MetadataStore:
                     f.file_id,
                     f.run_id,
                     r.sample_id,
-                    r.rotation_speed_rpm,
-                    r.travel_speed_mm_min,
-                    r.tool_id,
-                    r.material,
-                    r.thickness_mm,
+                    r.laser_power,
+                    r.scan_speed,
+                    r.powder_rate,
+                    r.argon_rate,
+                    r.substrate_temperature,
                     r.operator,
                     r.created_time,
                     r.clamping_condition,
@@ -497,11 +496,11 @@ class SampleDialog(tk.Toplevel):
 
         self.auto_sample_id = tk.BooleanVar(value=True)
         self.sample_id = tk.StringVar(value=generated_sample_id(0))
-        self.rotation_speed = tk.StringVar()
-        self.travel_speed = tk.StringVar()
-        self.tool_id = tk.StringVar()
-        self.material = tk.StringVar()
-        self.thickness = tk.StringVar()
+        self.laser_power = tk.StringVar()
+        self.scan_speed = tk.StringVar()
+        self.powder_rate = tk.StringVar()
+        self.argon_rate = tk.StringVar()
+        self.substrate_temperature = tk.StringVar()
         self.operator = tk.StringVar(value=os.environ.get("USERNAME", ""))
         self.clamping = tk.StringVar(value="unknown")
         self.backing = tk.StringVar(value="unknown")
@@ -522,7 +521,7 @@ class SampleDialog(tk.Toplevel):
         )
         ttk.Label(
             root,
-            text="Create the sample record when the physical sample is produced. Raw files can be linked to this sample later.",
+            text="Create the sample record when the physical DED sample is produced. Raw files can be linked to this sample later.",
             wraplength=700,
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(6, 12))
 
@@ -542,11 +541,11 @@ class SampleDialog(tk.Toplevel):
 
         fields = [
             ("Sample ID", sample_row),
-            ("Rotation speed (rpm)", self.rotation_speed),
-            ("Travel speed (mm/min)", self.travel_speed),
-            ("Tool ID", self.tool_id),
-            ("Material", self.material),
-            ("Thickness (mm)", self.thickness),
+            ("Laser power", self.laser_power),
+            ("Scan speed", self.scan_speed),
+            ("Powder rate", self.powder_rate),
+            ("Argon rate (optional)", self.argon_rate),
+            ("Substrate temperature (optional)", self.substrate_temperature),
             ("Operator", self.operator),
         ]
         for index, (label, variable) in enumerate(fields, start=2):
@@ -561,10 +560,10 @@ class SampleDialog(tk.Toplevel):
         for col in range(5):
             opt.columnconfigure(col, weight=1)
         option_fields = [
-            ("Clamping", self.clamping),
-            ("Backing/anvil", self.backing),
-            ("Cooling", self.cooling),
-            ("Tool wear", self.tool_wear),
+            ("Shielding", self.clamping),
+            ("Powder lot", self.backing),
+            ("Nozzle", self.cooling),
+            ("Substrate prep", self.tool_wear),
             ("Surface", self.surface),
         ]
         for col, (label, variable) in enumerate(option_fields):
@@ -596,11 +595,11 @@ class SampleDialog(tk.Toplevel):
         data = {
             "sample_id": self.sample_id.get().strip(),
             "run_id": self.sample_id.get().strip(),
-            "rotation_speed_rpm": self.rotation_speed.get().strip(),
-            "travel_speed_mm_min": self.travel_speed.get().strip(),
-            "tool_id": self.tool_id.get().strip(),
-            "material": self.material.get().strip(),
-            "thickness_mm": self.thickness.get().strip(),
+            "laser_power": self.laser_power.get().strip(),
+            "scan_speed": self.scan_speed.get().strip(),
+            "powder_rate": self.powder_rate.get().strip(),
+            "argon_rate": self.argon_rate.get().strip(),
+            "substrate_temperature": self.substrate_temperature.get().strip(),
             "operator": self.operator.get().strip(),
             "created_time": utc_now(),
             "clamping_condition": self.clamping.get(),
@@ -610,14 +609,7 @@ class SampleDialog(tk.Toplevel):
             "surface_condition": self.surface.get(),
             "optional_notes": self.notes.get("1.0", "end").strip(),
         }
-        required = [
-            "sample_id",
-            "rotation_speed_rpm",
-            "travel_speed_mm_min",
-            "tool_id",
-            "material",
-            "thickness_mm",
-        ]
+        required = ["sample_id", "laser_power", "scan_speed", "powder_rate"]
         missing = [name for name in required if not data[name]]
         if missing:
             messagebox.showerror(APP_NAME, "Missing required fields: " + ", ".join(missing))
@@ -626,11 +618,15 @@ class SampleDialog(tk.Toplevel):
             messagebox.showerror(APP_NAME, "This Sample ID already exists. Use a different Sample ID.")
             return
         try:
-            data["rotation_speed_rpm"] = float(data["rotation_speed_rpm"])
-            data["travel_speed_mm_min"] = float(data["travel_speed_mm_min"])
-            data["thickness_mm"] = float(data["thickness_mm"])
+            data["laser_power"] = float(data["laser_power"])
+            data["scan_speed"] = float(data["scan_speed"])
+            data["powder_rate"] = float(data["powder_rate"])
+            if data["argon_rate"] != "":
+                data["argon_rate"] = float(data["argon_rate"])
+            if data["substrate_temperature"] != "":
+                data["substrate_temperature"] = float(data["substrate_temperature"])
         except ValueError:
-            messagebox.showerror(APP_NAME, "Speed and thickness fields must be numbers.")
+            messagebox.showerror(APP_NAME, "Numeric parameter fields must be numbers when filled.")
             return
         self.result = data
         self.destroy()
@@ -826,7 +822,7 @@ class RegisterDialog(tk.Toplevel):
         self.sample_map.clear()
         values = []
         for row in self.store.sample_records():
-            label = f"{row['sample_id']} | {row['rotation_speed_rpm']} rpm x {row['travel_speed_mm_min']} mm/min"
+            label = f"{row['sample_id']} | {row['laser_power']} laser x {row['scan_speed']} scan"
             self.sample_map[label] = row
             values.append(label)
         self.sample_combo["values"] = values
@@ -843,8 +839,8 @@ class RegisterDialog(tk.Toplevel):
         self.sample_id.set(row["sample_id"])
         self.sample_summary.configure(
             text=(
-                f"Material: {row['material']} | Thickness: {row['thickness_mm']} mm | "
-                f"Tool: {row['tool_id']} | Operator: {row['operator'] or ''}"
+                f"Powder rate: {row['powder_rate']} | Argon: {row['argon_rate'] if row['argon_rate'] not in [None, ''] else 'not recorded'} | "
+                f"Substrate temp: {row['substrate_temperature'] if row['substrate_temperature'] not in [None, ''] else 'not recorded'} | Operator: {row['operator'] or ''}"
             )
         )
 
@@ -963,18 +959,18 @@ class DerivedResultDialog(tk.Toplevel):
         root.rowconfigure(5, weight=1)
 
         ttk.Label(root, text="Register Derived Results", font=("Segoe UI", 12, "bold")).grid(
-            row=0, column=0, columnspan=3, sticky="w"
+            row=0, column=0, columnspan=4, sticky="w"
         )
         ttk.Label(
             root,
-            text="Use this for values extracted from registered raw files, such as defect area, mean force, UTS, or yield strength.",
+            text="Use this for values extracted from registered raw files, such as melt pool width, bead height, dilution, UTS, or hardness.",
             wraplength=760,
-        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(6, 12))
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 12))
 
         ttk.Label(root, text="Sample ID").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=5)
         sample_values = self.store.sample_ids()
         self.sample_combo = ttk.Combobox(root, textvariable=self.sample_id, values=sample_values)
-        self.sample_combo.grid(row=2, column=1, columnspan=2, sticky="ew", pady=5)
+        self.sample_combo.grid(row=2, column=1, columnspan=3, sticky="ew", pady=5)
         self.sample_combo.bind("<<ComboboxSelected>>", lambda _event: self._refresh_source_files())
         if self.initial_sample_id:
             self.sample_id.set(self.initial_sample_id)
@@ -983,7 +979,7 @@ class DerivedResultDialog(tk.Toplevel):
 
         ttk.Label(root, text="Source raw file").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=5)
         self.source_combo = ttk.Combobox(root, textvariable=self.source_file, state="readonly")
-        self.source_combo.grid(row=3, column=1, columnspan=2, sticky="ew", pady=5)
+        self.source_combo.grid(row=3, column=1, columnspan=3, sticky="ew", pady=5)
 
         ttk.Label(root, text="Test type").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=5)
         ttk.Entry(root, textvariable=self.test_type).grid(row=4, column=1, sticky="ew", pady=5)
@@ -1103,8 +1099,8 @@ class App(tk.Tk):
         self.geometry("1100x620")
         self.minsize(960, 540)
         self.root_dir = app_root()
-        self.inbox_dir = self.root_dir / "FSW_Data_Inbox"
-        self.library_dir = self.root_dir / "FSW_Data_Library"
+        self.inbox_dir = self.root_dir / "DED_Data_Inbox"
+        self.library_dir = self.root_dir / "DED_Data_Library"
         self.inbox_dir.mkdir(exist_ok=True)
         self.library_dir.mkdir(exist_ok=True)
         self.store = MetadataStore(self.library_dir, self.root_dir)
@@ -1349,8 +1345,8 @@ class App(tk.Tk):
             sample_id = row["sample_id"] or row["run_id"] or "unknown_sample"
             sample_iid = f"sample::{sample_id}"
             label = (
-                f"{sample_id}  |  {row['rotation_speed_rpm']} rpm x "
-                f"{row['travel_speed_mm_min']} mm/min"
+                f"{sample_id}  |  {row['laser_power']} laser power x "
+                f"{row['scan_speed']} scan speed"
             )
             self.library_tree.insert("", "end", iid=sample_iid, text=label, open=True)
             sample_nodes[sample_id] = sample_iid
@@ -1365,8 +1361,8 @@ class App(tk.Tk):
 
             if sample_id not in sample_nodes:
                 label = (
-                    f"{sample_id}  |  {row['rotation_speed_rpm']} rpm x "
-                    f"{row['travel_speed_mm_min']} mm/min"
+                    f"{sample_id}  |  {row['laser_power']} laser power x "
+                    f"{row['scan_speed']} scan speed"
                 )
                 self.library_tree.insert("", "end", iid=sample_iid, text=label, open=True)
                 sample_nodes[sample_id] = sample_iid
@@ -1441,18 +1437,18 @@ class App(tk.Tk):
             f"Relative path: {row['new_relative_path'] or relative_to_root(self.root_dir, path)}",
             f"Absolute path: {path}",
             "",
-            f"Rotation speed: {row['rotation_speed_rpm']} rpm",
-            f"Travel speed: {row['travel_speed_mm_min']} mm/min",
-            f"Tool ID: {row['tool_id']}",
-            f"Material: {row['material']}",
-            f"Thickness: {row['thickness_mm']} mm",
+            f"Laser power: {row['laser_power']}",
+            f"Scan speed: {row['scan_speed']}",
+            f"Powder rate: {row['powder_rate']}",
+            f"Argon rate: {row['argon_rate'] if row['argon_rate'] not in [None, ''] else 'not recorded'}",
+            f"Substrate temperature: {row['substrate_temperature'] if row['substrate_temperature'] not in [None, ''] else 'not recorded'}",
             f"Operator: {row['operator'] or ''}",
             f"Registered time: {row['registered_time']}",
             "",
-            f"Clamping: {row['clamping_condition'] or 'unknown'}",
-            f"Backing/anvil: {row['backing_condition'] or 'unknown'}",
-            f"Cooling: {row['cooling_condition'] or 'unknown'}",
-            f"Tool wear: {row['tool_wear_state'] or 'unknown'}",
+            f"Shielding: {row['clamping_condition'] or 'unknown'}",
+            f"Powder lot: {row['backing_condition'] or 'unknown'}",
+            f"Nozzle: {row['cooling_condition'] or 'unknown'}",
+            f"Substrate prep: {row['tool_wear_state'] or 'unknown'}",
             f"Surface: {row['surface_condition'] or 'unknown'}",
             "",
             f"Notes: {row['optional_notes'] or row['file_notes'] or ''}",
@@ -1466,18 +1462,18 @@ class App(tk.Tk):
             f"Sample ID: {row['sample_id']}",
             "Record type: registered sample",
             "",
-            f"Rotation speed: {row['rotation_speed_rpm']} rpm",
-            f"Travel speed: {row['travel_speed_mm_min']} mm/min",
-            f"Tool ID: {row['tool_id']}",
-            f"Material: {row['material']}",
-            f"Thickness: {row['thickness_mm']} mm",
+            f"Laser power: {row['laser_power']}",
+            f"Scan speed: {row['scan_speed']}",
+            f"Powder rate: {row['powder_rate']}",
+            f"Argon rate: {row['argon_rate'] if row['argon_rate'] not in [None, ''] else 'not recorded'}",
+            f"Substrate temperature: {row['substrate_temperature'] if row['substrate_temperature'] not in [None, ''] else 'not recorded'}",
             f"Operator: {row['operator'] or ''}",
             f"Created time: {row['created_time']}",
             "",
-            f"Clamping: {row['clamping_condition'] or 'unknown'}",
-            f"Backing/anvil: {row['backing_condition'] or 'unknown'}",
-            f"Cooling: {row['cooling_condition'] or 'unknown'}",
-            f"Tool wear: {row['tool_wear_state'] or 'unknown'}",
+            f"Shielding: {row['clamping_condition'] or 'unknown'}",
+            f"Powder lot: {row['backing_condition'] or 'unknown'}",
+            f"Nozzle: {row['cooling_condition'] or 'unknown'}",
+            f"Substrate prep: {row['tool_wear_state'] or 'unknown'}",
             f"Surface: {row['surface_condition'] or 'unknown'}",
             "",
             f"Production notes: {row['optional_notes'] or ''}",
@@ -1594,11 +1590,9 @@ class App(tk.Tk):
         prefix = "_".join(
             [
                 safe_text(run_data["sample_id"]),
-                f"{int(float(run_data['rotation_speed_rpm']))}rpm",
-                f"{int(float(run_data['travel_speed_mm_min']))}mmmin",
-                safe_text(run_data["tool_id"]),
-                safe_text(run_data["material"]),
-                f"{safe_text(str(run_data['thickness_mm']))}mm",
+                f"{safe_text(str(run_data['laser_power']))}laser",
+                f"{safe_text(str(run_data['scan_speed']))}scan",
+                f"{safe_text(str(run_data['powder_rate']))}powder",
             ]
         )
         return f"{prefix}_{safe_text(file_type)}_{local_stamp()}{source.suffix.lower()}"
@@ -1606,7 +1600,7 @@ class App(tk.Tk):
 
 def run_self_test() -> None:
     root = app_root()
-    library = root / "FSW_Data_Library"
+    library = root / "DED_Data_Library"
     library.mkdir(exist_ok=True)
     store = MetadataStore(library)
     store.export_csvs()
@@ -1622,6 +1616,7 @@ if __name__ == "__main__":
             app = App()
             app.mainloop()
     except Exception:
-        log_path = app_root() / "fsw_metadata_monitor_crash.log"
+        log_path = app_root() / "ded_metadata_monitor_crash.log"
         log_path.write_text(traceback.format_exc(), encoding="utf-8")
         raise
+
